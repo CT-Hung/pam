@@ -13,6 +13,7 @@ bits = 16
 source_data = data/2**(bits-1)
 source_data.astype('float64')
 print("FS = ",fs)
+leng = int(fs*1.5+1)
 
 class pingerStatus:
     def __init__(self, x, y):
@@ -34,6 +35,7 @@ class micPosition:
         self.tl = 0.0 #transmission lose
         self.rl = 0.0 #receive level
         self.ds = 0.0
+        self.data = np.zeros(leng)
 
 def receiveTime(x1, y1, x2, y2):
     t = (pow((x1-x2)**2+(y1-y2)**2, 0.5))
@@ -42,15 +44,29 @@ def receiveTime(x1, y1, x2, y2):
 
 def receiverOrder(t1, t2, t3):
     index = np.argmin([t1, t2, t3])+1
-    print("index = ", index)
     return index
 
+'''
 def corrXT(a, b): 
     maxArgu = np.argmax(np.correlate(a, b, "full"))-b.size+1
-    #print('maxArgu = ', maxArgu)
+    print(maxArgu)
     real_recevie_t = round((maxArgu)/fs, 10)
     return real_recevie_t
+'''
 
+def corrXT2(a_data, b_data, x1, y1, x2, y2):
+    a = a_data
+    b = b_data
+    r = (pow((x1-x2)**2+(y1-y2)**2, 0.5))
+    d = math.ceil(r/c*fs)+10
+    tmp = np.zeros(d)
+    for i in range(d):
+        tmp[i] = np.sum(a[i:]*b[:(len(b)-i)])
+    maxArgu = np.argmax(tmp)
+    real_recevie_t = (maxArgu)/fs
+    real_recevie_t = round((maxArgu)/fs, 10)
+    return real_recevie_t
+'''
 def sourceToBoat(t1, t2):
     dt = t1-t2
     print("dt = ", dt)
@@ -58,6 +74,7 @@ def sourceToBoat(t1, t2):
     theta = 90-math.acos(c*dt/l)*180/np.pi
     print("cal angle = ", theta)
     print("realAngle = ", angle([source.x, source.y]))
+'''
 
 def angle(pos):
     x, y = pos
@@ -68,36 +85,69 @@ def angle(pos):
     return round(a, 1)
 
 def addNoise(data, noise, d, t):
-    data = data/d**0.5
-    print(t)
-    noise[t:len(data)+t] += data
-    return noise 
+    tmp_data = data.copy()
+    tmp_noise = noise.copy()
+    tmp_data = tmp_data/d**0.5
+    tmp_noise[t:len(tmp_data)+t] += tmp_data
+    return tmp_noise 
 
-def sourceLevel(data):
+def sourceLevel(d):
+    data = d.copy()
     gain = 10**((source.sl+sen)/20)
     data = data*gain
     return data
     
 def tdoa(x1, y1, t1, x2, y2, t2, x3, y3, t3):
-    x, y = symbols('x, y')#, complex=False)
+    x, y = symbols('x, y')
     eq1 = ((x-x1)**2.0+(y-y1)**2.0)**0.5-((x-x3)**2.0+(y-y3)**2.0)**0.5-c*(t1-t3)
     eq2 = ((x-x1)**2.0+(y-y1)**2.0)**0.5-((x-x2)**2.0+(y-y2)**2.0)**0.5-c*(t1-t2)
     eq3 = ((x-x2)**2.0+(y-y2)**2.0)**0.5-((x-x3)**2.0+(y-y3)**2.0)**0.5-c*(t2-t3)
     pos = solve([eq1, eq2, eq3], [x, y])
-    print(pos)
     if pos:
-        if type(pos[0]) != complex: 
-            ang = angle(pos[0])
-            source.guessx = pos[0][0]
-            source.guessy = pos[0][1]
-            source.guessAngle = ang
+        print("roots = ", pos)
+        if pos[0][0].is_Float:
+            if len(pos) > 1:
+                droot = 1
+                source.guessx = pos[0][0]
+                source.guessy = pos[0][1]
+                source.guessx1 = pos[1][0]
+                source.guessy1 = pos[1][1]
+            else:
+                droot = 0
+                source.guessx = pos[0][0]
+                source.guessy = pos[0][1]
+            #ang = angle(pos[0])
+            #source.guessAngle = ang
         else:
-            print("pos is complex")
+            droot = 3
+            print("root is complex")
     else:
-        print("pos is empty")
-    return 0
+        droot = 3
+        print("root is empty")
+    return droot
 
-source = pingerStatus(100, 2000)
+def printData(droot):
+    if droot == 0:
+        print("guess position 1 = ", source.guessx, ", ", source.guessy)
+    elif droot == 1:
+        print("guess position 1 = ", source.guessx, ", ", source.guessy)
+        print("guess position 2 = ", source.guessx1, ", ", source.guessy1)
+    elif droot == 3:
+        print("There is no real root.")
+    print("real position = ", source.x, ", ", source.y)
+    #print("guess angle = ", source.guessAngle)
+    #print("real angle = ", angle([source.x, source.y]))
+    print("----------------------------------------------------")
+    
+def dataVisual(droot):
+    plt.plot(source.x, source.y, 'bv')
+    if droot == 0:
+        plt.plot(source.guessx, source.guessy, 'go')
+    elif droot == 1:
+        plt.plot(source.guessx, source.guessy, 'go')
+        plt.plot(source.guessx1, source.guessy1, 'go')
+
+source = pingerStatus(100, 1400)
 A2 = micPosition(550, 0)
 A1 = micPosition(0, 500)
 A3 = micPosition(-550, 0)
@@ -107,15 +157,20 @@ A3.fs, A3.noise = wavfile.read('./A3_noise.wav')
 A1.noise = A1.noise/2**(bits-1)
 A2.noise = A2.noise/2**(bits-1)
 A3.noise = A3.noise/2**(bits-1)
-print(len(A1.noise), len(A2.noise), len(A3.noise), len(source_data))
-
+plt.plot([A1.x, A2.x, A3.x], [A1.y, A2.y, A3.y], 'r*')
 source.sl = float(input('Source Level = '))
+#source.sl = 150
 source.data = sourceLevel(source_data)
 
 while(1):
-#    xx = float(input('x of boat = '))
-#    yy = float(input('y of boat = '))
+
+    A1.data = np.zeros(leng)
+    A2.data = np.zeros(leng)
+    A3.data = np.zeros(leng)
     time_start = time.time()
+
+    source.y = source.y-100
+
     A1.idt = receiveTime(source.x, source.y, A1.x, A1.y)
     A2.idt = receiveTime(source.x, source.y, A2.x, A2.y)
     A3.idt = receiveTime(source.x, source.y, A3.x, A3.y)
@@ -136,10 +191,41 @@ while(1):
         A2.data = addNoise(source.data, A2.noise, A2.d, A2.ds)
         A3.data = addNoise(source.data, A3.noise, A3.d, A3.ds)
         A1.rt = 0
-        A2.rt = corrXT(A2.data, A1.data)
-        A3.rt = corrXT(A3.data, A1.data)
-        tdoa(A1.x, A1.y, A1.rt, A2.x, A2.y, A2.rt, A3.x, A3.y, A3.rt)
-    
+        A2.rt = corrXT2(A2.data, A1.data, A2.x, A2.y, A1.x, A1.y)
+        A3.rt = corrXT2(A3.data, A1.data, A3.x, A3.y, A1.x, A1.y)
+        droot = tdoa(A1.x, A1.y, A1.rt, A2.x, A2.y, A2.rt, A3.x, A3.y, A3.rt)
+    elif first_index == 2: #mic2 first receive
+        A2.ds = 0
+        A1.ds = math.ceil(abs(A2.idt-A1.idt)*fs)
+        A3.ds = math.ceil(abs(A2.idt-A3.idt)*fs)
+        A1.data = addNoise(source.data, A1.noise, A1.d, A1.ds)
+        A2.data = addNoise(source.data, A2.noise, A2.d, A2.ds)
+        A3.data = addNoise(source.data, A3.noise, A3.d, A3.ds)
+        A2.rt = 0
+        A1.rt = corrXT2(A1.data, A2.data, A1.x, A1.y, A2.x, A2.y)
+        A3.rt = corrXT2(A3.data, A2.data, A3.x, A3.y, A2.x, A2.y)
+        droot = tdoa(A1.x, A1.y, A1.rt, A2.x, A2.y, A2.rt, A3.x, A3.y, A3.rt)
+    elif first_index == 3: #mic3 first receive
+        A3.ds = 0
+        A1.ds = math.ceil(abs(A3.idt-A1.idt)*fs)
+        A2.ds = math.ceil(abs(A3.idt-A2.idt)*fs)
+        A1.data = addNoise(source.data, A1.noise, A1.d, A1.ds)
+        A2.data = addNoise(source.data, A2.noise, A2.d, A2.ds)
+        A3.data = addNoise(source.data, A3.noise, A3.d, A3.ds)
+        A3.rt = 0
+        A1.rt = corrXT2(A1.data, A3.data, A1.x, A1.y, A3.x, A3.y)
+        A2.rt = corrXT2(A2.data, A3.data, A2.x, A2.y, A3.x, A3.y)
+        droot = tdoa(A1.x, A1.y, A1.rt, A2.x, A2.y, A2.rt, A3.x, A3.y, A3.rt)
+
+    time_end = time.time()
+    print("Time use = ", time_end-time_start)
+    printData(droot)
+    dataVisual(droot)
+    if source.y <= -1300:
+        plt.show()
+        break
+
+    '''    
     plt.figure(1)
     plt.subplot(411)
     plt.plot(source.data)
@@ -149,28 +235,21 @@ while(1):
     plt.plot(A2.data)
     plt.subplot(414)
     plt.plot(A3.data)
-
+    '''
+    '''
     plt.figure(2)
     plt.subplot(411)
     f, t, Sxx = signal.spectrogram(source.data, fs)
     plt.pcolormesh(t, f, Sxx)
     plt.subplot(412)
-    f, t, Sxx = signal.spectrogram(A1.noise, fs)
+    f, t, Sxx = signal.spectrogram(A1.data, fs)
     plt.pcolormesh(t, f, Sxx)
    # plt.colorbar()
     plt.subplot(413)
-    f, t, Sxx = signal.spectrogram(A1.noise, fs)
+    f, t, Sxx = signal.spectrogram(A2.data, fs)
     plt.pcolormesh(t, f, Sxx)
     plt.subplot(414)
-    f, t, Sxx = signal.spectrogram(A1.noise, fs)
+    f, t, Sxx = signal.spectrogram(A3.data, fs)
     plt.pcolormesh(t, f, Sxx)
     plt.show()
-    print("guess position = ", source.guessx, ", ", source.guessy)
-    print("real position = ", source.x, ", ", source.y)
-    print("guess angle = ", source.guessAngle)
-    print("real angle = ", angle([source.x, source.y]))
-    time_end = time.time()
-    print("Time use = ", time_end-time_start)
-    break
-
-#print(source.guessx, source.guessy)
+    '''    
