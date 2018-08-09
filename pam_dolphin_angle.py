@@ -157,7 +157,7 @@ A3.fs, A3.noise = wavfile.read('./A3_noise.wav')
 A1.noise = A1.noise/2**(bits-1)
 A2.noise = A2.noise/2**(bits-1)
 A3.noise = A3.noise/2**(bits-1)
-plt.plot([A1.x, A2.x, A3.x], [A1.y, A2.y, A3.y], 'r*')
+plt.plot([A1.x, A2.x, A3.x], [A1.y, A2.y, A3.y], 'r*', label='Hydrophone')
 source.sl = float(input('Source Level = '))
 #source.sl = 150
 source.data = sourceLevel(source_data)
@@ -222,6 +222,12 @@ while(1):
     printData(droot)
     dataVisual(droot)
     if source.y <= -1300:
+        plt.plot(source.x, source.y, 'bv', label='Source')
+        plt.plot(source.guessx, source.guessy, 'go', label='Guess position')
+        plt.title('160dB 5k_9k Chirp')
+        plt.xlabel('X (m)')
+        plt.ylabel('Y (m)')
+        plt.legend(loc=2, borderaxespad=0.)
         plt.show()
         break
 
