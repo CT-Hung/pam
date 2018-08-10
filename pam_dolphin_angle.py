@@ -19,11 +19,13 @@ class pingerStatus:
     def __init__(self, x, y):
         self.x = x
         self.y = y
-        self.guessx = 99.0
-        self.guessy = 99.0
         self.guessAngle = 0
         self.realAngle = 0
         self.sl = 0.0
+        self.guessx = np.array([])
+        self.guessy = np.array([])
+        self.guessx1 = np.array([])
+        self.guessy1 = np.array([])
 
 class micPosition:
     def __init__(self, x, y):
@@ -108,14 +110,20 @@ def tdoa(x1, y1, t1, x2, y2, t2, x3, y3, t3):
         if pos[0][0].is_Float:
             if len(pos) > 1:
                 droot = 1
-                source.guessx = pos[0][0]
-                source.guessy = pos[0][1]
-                source.guessx1 = pos[1][0]
-                source.guessy1 = pos[1][1]
+                source.guessx = np.append(source.guessx, pos[0][0])
+                source.guessy = np.append(source.guessy, pos[0][1])
+                source.guessx1 = np.append(source.guessx1, pos[1][0])
+                source.guessy1 = np.append(source.guessy1, pos[1][1])
+                source.px1 = pos[0][0]
+                source.py1 = pos[0][1]
+                source.px2 = pos[1][0]
+                source.py2 = pos[1][1]
             else:
                 droot = 0
-                source.guessx = pos[0][0]
-                source.guessy = pos[0][1]
+                source.guessx = np.append(source.guessx, pos[0][0])
+                source.guessy = np.append(source.guessy, pos[0][1])
+                source.px1 = pos[0][0]
+                source.py1 = pos[0][1]
             #ang = angle(pos[0])
             #source.guessAngle = ang
         else:
@@ -128,10 +136,10 @@ def tdoa(x1, y1, t1, x2, y2, t2, x3, y3, t3):
 
 def printData(droot):
     if droot == 0:
-        print("guess position 1 = ", source.guessx, ", ", source.guessy)
+        print("guess position 1 = ", source.px1, ", ", source.py1)
     elif droot == 1:
-        print("guess position 1 = ", source.guessx, ", ", source.guessy)
-        print("guess position 2 = ", source.guessx1, ", ", source.guessy1)
+        print("guess position 1 = ", source.px1, ", ", source.py1)
+        print("guess position 2 = ", source.px2, ", ", source.py2)
     elif droot == 3:
         print("There is no real root.")
     print("real position = ", source.x, ", ", source.y)
@@ -140,12 +148,20 @@ def printData(droot):
     print("----------------------------------------------------")
     
 def dataVisual(droot):
-    plt.plot(source.x, source.y, 'bv')
-    if droot == 0:
-        plt.plot(source.guessx, source.guessy, 'go')
-    elif droot == 1:
-        plt.plot(source.guessx, source.guessy, 'go')
-        plt.plot(source.guessx1, source.guessy1, 'go')
+    plt.plot([A1.x, A2.x, A3.x], [A1.y, A2.y, A3.y], 'r*', label='Hydrophone')
+    plt.plot(s_x, s_y, 'bv', label='Source')
+    plt.plot(source.guessx, source.guessy, 'go', label='Guess position')
+    plt.plot(source.guessx1, source.guessy1, 'go')
+    title = str(source.sl)+'dB 5K_9K Chrip'
+    plt.title(title)
+    plt.xlabel('X (m)')
+    plt.ylabel('Y (m)')
+    plt.legend(loc=2, borderaxespad=0.)
+    plt.xlim((-700, 700))
+    plt.ylim((-1500, 1500))
+    msg = str(source.sl)+'dB_'+str(i)+'.png'
+    plt.savefig(msg)
+    plt.show()
 
 source = pingerStatus(100, 1400)
 A2 = micPosition(550, 0)
@@ -157,11 +173,12 @@ A3.fs, A3.noise = wavfile.read('./A3_noise.wav')
 A1.noise = A1.noise/2**(bits-1)
 A2.noise = A2.noise/2**(bits-1)
 A3.noise = A3.noise/2**(bits-1)
-plt.plot([A1.x, A2.x, A3.x], [A1.y, A2.y, A3.y], 'r*', label='Hydrophone')
 source.sl = float(input('Source Level = '))
 #source.sl = 150
 source.data = sourceLevel(source_data)
-
+s_x = np.array([])
+s_y = np.array([])
+i = 1
 while(1):
 
     A1.data = np.zeros(leng)
@@ -170,6 +187,8 @@ while(1):
     time_start = time.time()
 
     source.y = source.y-100
+    s_x = np.append(s_x, source.x)
+    s_y = np.append(s_y, source.y)
 
     A1.idt = receiveTime(source.x, source.y, A1.x, A1.y)
     A2.idt = receiveTime(source.x, source.y, A2.x, A2.y)
@@ -222,15 +241,9 @@ while(1):
     printData(droot)
     dataVisual(droot)
     if source.y <= -1300:
-        plt.plot(source.x, source.y, 'bv', label='Source')
-        plt.plot(source.guessx, source.guessy, 'go', label='Guess position')
-        plt.title('160dB 5k_9k Chirp')
-        plt.xlabel('X (m)')
-        plt.ylabel('Y (m)')
-        plt.legend(loc=2, borderaxespad=0.)
-        plt.show()
         break
 
+    i = i+1
     '''    
     plt.figure(1)
     plt.subplot(411)
