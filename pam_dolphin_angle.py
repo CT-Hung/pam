@@ -48,24 +48,16 @@ def receiverOrder(t1, t2, t3):
     index = np.argmin([t1, t2, t3])+1
     return index
 
-'''
-def corrXT(a, b): 
-    maxArgu = np.argmax(np.correlate(a, b, "full"))-b.size+1
-    print(maxArgu)
-    real_recevie_t = round((maxArgu)/fs, 10)
-    return real_recevie_t
-'''
-
 def corrXT2(a_data, b_data, x1, y1, x2, y2):
-    a = a_data
-    b = b_data
+    a = a_data.copy()
+    b = b_data.copy()
     r = (pow((x1-x2)**2+(y1-y2)**2, 0.5))
     d = math.ceil(r/c*fs)+10
     tmp = np.zeros(d)
     for i in range(d):
         tmp[i] = np.sum(a[i:]*b[:(len(b)-i)])
     maxArgu = np.argmax(tmp)
-    real_recevie_t = (maxArgu)/fs
+    #real_recevie_t = (maxArgu)/fs
     real_recevie_t = round((maxArgu)/fs, 10)
     return real_recevie_t
 '''
@@ -88,7 +80,8 @@ def angle(pos):
 
 def addNoise(data, noise, d, t):
     tmp_data = data.copy()
-    tmp_noise = noise.copy()
+    tmp_noise = np.hstack((noise.copy(), np.zeros(int(0.5*fs))))
+    #tmp_noise = noise.copy()
     tmp_data = tmp_data/d**0.5
     tmp_noise[t:len(tmp_data)+t] += tmp_data
     return tmp_noise 
@@ -152,18 +145,19 @@ def dataVisual(droot):
     plt.plot(s_x, s_y, 'bv', label='Source')
     plt.plot(source.guessx, source.guessy, 'go', label='Guess position')
     plt.plot(source.guessx1, source.guessy1, 'go')
-    title = str(source.sl)+'dB 5K_9K Chrip'
-    plt.title(title)
+    msg = str(source.sl)+'dB_5k_9k Chrip x='+str(source.x)+'m_'+str(i)
+    plt.title(msg)
     plt.xlabel('X (m)')
     plt.ylabel('Y (m)')
     plt.legend(loc=2, borderaxespad=0.)
     plt.xlim((-700, 700))
     plt.ylim((-1500, 1500))
-    msg = str(source.sl)+'dB_'+str(i)+'.png'
+    msg = msg+'.png'
     plt.savefig(msg)
-    plt.show()
+    #plt.show()
+    plt.clf()
 
-source = pingerStatus(100, 1400)
+source = pingerStatus(400, 1400)
 A2 = micPosition(550, 0)
 A1 = micPosition(0, 500)
 A3 = micPosition(-550, 0)
@@ -201,6 +195,7 @@ while(1):
     A3.tl = 10*math.log(A3.d)
 
     first_index = receiverOrder(A1.idt, A2.idt, A3.idt) 
+    print("index = ", first_index)
 
     if first_index == 1: #mic1 first receive
         A1.ds = 0
@@ -212,6 +207,7 @@ while(1):
         A1.rt = 0
         A2.rt = corrXT2(A2.data, A1.data, A2.x, A2.y, A1.x, A1.y)
         A3.rt = corrXT2(A3.data, A1.data, A3.x, A3.y, A1.x, A1.y)
+        print(A2.rt, A3.rt)
         droot = tdoa(A1.x, A1.y, A1.rt, A2.x, A2.y, A2.rt, A3.x, A3.y, A3.rt)
     elif first_index == 2: #mic2 first receive
         A2.ds = 0
